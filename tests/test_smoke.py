@@ -325,3 +325,34 @@ def test_usage_sensor_exposes_resets_at(fake_usage_data):
     session_desc = next(s for s in SENSORS if s.key == "session_utilization")
     sensor = _make_sensor(coordinator, session_desc)
     assert sensor.extra_state_attributes == {"resets_at": "2026-04-14T05:00:00+00:00"}
+
+
+def test_transform_codenamed_sections(fake_raw_api_data):
+    raw = {
+        **fake_raw_api_data,
+        "extra_usage": None,
+        "iguana_necktie": {
+            "utilization": 89.707163,
+            "resets_at": "2026-11-05T07:59:00+00:00",
+            "limit_dollars": 100,
+            "used_dollars": 89.707163,
+            "remaining_dollars": 10.292837000000006,
+        },
+        "cedar_ember": {
+            "grants": [
+                {"resets_left": 0, "ends_at": "2026-10-22T16:00:00+00:00"},
+                {"resets_left": 2, "ends_at": "2026-11-20T00:00:00+00:00"},
+            ],
+        },
+    }
+    data = _transform(raw)
+
+    assert data["cloud_credits"] == {
+        "remaining": 10.29,
+        "total": 100.0,
+        "expires_at": "2026-11-05T07:59:00+00:00",
+        "currency": "USD",
+    }
+    assert data["limit_resets"] == {"count": 2, "next_expires_at": "2026-11-20T00:00:00+00:00"}
+    assert data["extra_usage"]["used"] is None
+    assert data["extra_usage"]["limit"] is None

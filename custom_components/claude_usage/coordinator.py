@@ -334,6 +334,10 @@ def _number(value) -> float | None:
     return None
 
 
+def _round2(value: float | None) -> float | None:
+    return round(value, 2) if value is not None else None
+
+
 def _subscription_type(raw: dict, organization: dict) -> str | None:
     """Déduit le plan (Free / Pro / Max 5x / Max 20x / Team / Enterprise)."""
     explicit = _deep_find(raw, ("subscription_type", "plan_type", "plan"))
@@ -363,6 +367,17 @@ def _subscription_type(raw: dict, organization: dict) -> str | None:
 
 def _limit_resets(payloads: dict) -> dict:
     """Section « Limit resets » : liste de resets disponibles avec date d'expiration."""
+    # /usage expose les resets sous le nom de code `cedar_ember.grants`.
+    grants = ((payloads.get("usage") or {}).get("cedar_ember") or {}).get("grants")
+    if isinstance(grants, list):
+        left = [g for g in grants if isinstance(g, dict)]
+        expiries = sorted(
+            str(g["ends_at"]) for g in left if g.get("ends_at") and (g.get("resets_left") or 0) > 0
+        )
+        return {
+            "count": int(sum(_number(g.get("resets_left")) or 0 for g in left)),
+            "next_expires_at": expiries[0] if expiries else None,
+        }
     found = _deep_find(
         payloads,
         ("limit_resets", "rate_limit_resets", "available_resets", "reset_grants"),
@@ -382,6 +397,15 @@ def _limit_resets(payloads: dict) -> dict:
 
 def _cloud_credits(payloads: dict) -> dict:
     """Section « Cloud session credits » (montants en cents si le champ l'indique)."""
+    # /usage expose le crédit sous le nom de code `iguana_necktie` (montants en dollars).
+    slot = (payloads.get("usage") or {}).get("iguana_necktie")
+    if isinstance(slot, dict) and slot.get("limit_dollars") is not None:
+        return {
+            "remaining": _round2(_number(slot.get("remaining_dollars"))),
+            "total": _round2(_number(slot.get("limit_dollars"))),
+            "expires_at": slot.get("resets_at"),
+            "currency": "USD",
+        }
     section = _deep_find(
         payloads,
         ("cloud_session_credits", "cloud_session_credit", "cloud_credits", "remote_session_credits"),
@@ -428,9 +452,10 @@ def _transform(raw: dict, extras: dict | None = None) -> dict:
     """
     extras = extras or {}
     payloads = {"usage": raw, **extras}
+    # extra_usage vaut null quand l'usage supplémentaire est désactivé.
     extra = raw.get("extra_usage") or {}
-    used = extra.get("used_credits") or 0.0
-    limit = extra.get("monthly_limit") or 0
+    used = extra.get("used_credits") if extra else None
+    limit = extra.get("monthly_limit") if extra else None
     return {
         "session_5h": _parse_slot(raw, "five_hour"),
         "weekly": _parse_slot(raw, "seven_day"),
@@ -440,7 +465,7 @@ def _transform(raw: dict, extras: dict | None = None) -> dict:
             "enabled": extra.get("is_enabled", False),
             "used": used,
             "limit": limit,
-            "utilization": round(used / limit * 100, 1) if limit else 0.0,
+            "utilization": round((used or 0) / limit * 100, 1) if limit else None,
             "currency": extra.get("currency"),
         },
         "subscription_type": _subscription_type(raw, extras.get("organization") or {}),
