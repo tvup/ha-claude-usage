@@ -104,6 +104,7 @@ SENSORS: tuple[ClaudeUsageSensorDescription, ...] = (
         name="Cloud Credits Left",
         icon="mdi:cloud-outline",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         value_fn=lambda d: (d.get("cloud_credits") or {}).get("remaining"),
         attrs_fn=lambda d: {"currency": (d.get("cloud_credits") or {}).get("currency")},
     ),
@@ -112,6 +113,7 @@ SENSORS: tuple[ClaudeUsageSensorDescription, ...] = (
         name="Cloud Credits Total",
         icon="mdi:cloud",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         value_fn=lambda d: (d.get("cloud_credits") or {}).get("total"),
         attrs_fn=lambda d: {"currency": (d.get("cloud_credits") or {}).get("currency")},
     ),
@@ -127,6 +129,7 @@ SENSORS: tuple[ClaudeUsageSensorDescription, ...] = (
         name="Usage Credits",
         icon="mdi:wallet-outline",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         value_fn=lambda d: (d.get("usage_credits") or {}).get("amount"),
         attrs_fn=lambda d: {
             "currency": (d.get("usage_credits") or {}).get("currency"),
@@ -144,6 +147,7 @@ SENSORS: tuple[ClaudeUsageSensorDescription, ...] = (
         name="Monthly Spend Limit",
         icon="mdi:cash-lock",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         value_fn=lambda d: _cents_to_amount((d.get("extra_usage") or {}).get("limit")),
         attrs_fn=lambda d: {
             "currency": (d.get("extra_usage") or {}).get("currency"),
@@ -155,6 +159,7 @@ SENSORS: tuple[ClaudeUsageSensorDescription, ...] = (
         name="Monthly Spend Used",
         icon="mdi:cash-minus",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         value_fn=lambda d: _cents_to_amount((d.get("extra_usage") or {}).get("used")),
         attrs_fn=lambda d: {
             "currency": (d.get("extra_usage") or {}).get("currency"),
