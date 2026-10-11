@@ -455,20 +455,14 @@ def _transform(raw: dict, extras: dict | None = None) -> dict:
     """
     extras = extras or {}
     payloads = {"usage": raw, **extras}
-    # extra_usage vaut null quand l'usage supplémentaire est désactivé :
-    # on se rabat alors sur overage_spend_limit (mêmes montants, en cents).
+    # extra_usage est null, ou ses champs sont null, quand l'usage supplémentaire
+    # est désactivé : on complète champ par champ avec overage_spend_limit (cents).
     extra = raw.get("extra_usage") or {}
     overage = extras.get("overage_spend_limit") or {}
-    if extra:
-        used = extra.get("used_credits")
-        limit = extra.get("monthly_limit")
-        enabled = extra.get("is_enabled", False)
-        currency = extra.get("currency")
-    else:
-        used = overage.get("used_credits")
-        limit = overage.get("monthly_credit_limit")
-        enabled = overage.get("is_enabled", False)
-        currency = overage.get("currency")
+    used = _first(extra.get("used_credits"), overage.get("used_credits"))
+    limit = _first(extra.get("monthly_limit"), overage.get("monthly_credit_limit"))
+    enabled = _first(extra.get("is_enabled"), overage.get("is_enabled"), False)
+    currency = _first(extra.get("currency"), overage.get("currency"))
     return {
         "session_5h": _parse_slot(raw, "five_hour"),
         "weekly": _parse_slot(raw, "seven_day"),

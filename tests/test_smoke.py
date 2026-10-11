@@ -370,3 +370,16 @@ def test_transform_extra_usage_falls_back_to_overage_spend_limit(fake_raw_api_da
         "utilization": 0.0,
         "currency": "USD",
     }
+
+
+def test_transform_extra_usage_null_fields_fall_back_to_overage(fake_raw_api_data):
+    raw = {
+        **fake_raw_api_data,
+        "extra_usage": {"is_enabled": False, "monthly_limit": None, "used_credits": None, "currency": None},
+    }
+    overage = {"is_enabled": False, "monthly_credit_limit": 4000, "used_credits": 0, "currency": "USD"}
+    data = _transform(raw, {"overage_spend_limit": overage})
+
+    assert data["extra_usage"]["limit"] == 4000
+    assert data["extra_usage"]["used"] == 0
+    assert data["extra_usage"]["currency"] == "USD"
