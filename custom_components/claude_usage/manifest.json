@@ -1,13 +1,13 @@
 {
   "domain": "claude_usage",
   "name": "Claude Usage",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "config_flow": true,
   "iot_class": "cloud_polling",
-  "documentation": "https://github.com/juliensere/ha-cloud-usage",
-  "issue_tracker": "https://github.com/juliensere/ha-cloud-usage/issues",
+  "documentation": "https://github.com/tvup/ha-cloud-usage",
+  "issue_tracker": "https://github.com/tvup/ha-cloud-usage/issues",
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@juliensere"],
+  "codeowners": ["@tvup"],
   "homeassistant": "2024.1.0"
 }

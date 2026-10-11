@@ -460,7 +460,11 @@ async def _fetch_optional(
         url = BASE_URL + endpoint.format(org_id=org_id)
         try:
             async with session.get(
-                url, headers=headers, timeout=_TIMEOUT, allow_redirects=False
+                url,
+                headers=headers,
+                timeout=_TIMEOUT,
+                allow_redirects=False,
+                trace_request_ctx={},
             ) as resp:
                 if resp.status != 200:
                     _LOGGER.debug("[OPTIONNEL] %s → status %d, ignoré", name, resp.status)
