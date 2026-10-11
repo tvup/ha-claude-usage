@@ -10,7 +10,8 @@ UPDATE_INTERVAL_MIN = 10    # seconds (minimum)
 UPDATE_INTERVAL_MAX = 21600 # seconds (maximum = 6 h)
 
 BASE_URL = "https://claude.ai"
-USAGE_ENDPOINT = "/api/organizations/{org_id}/usage"
+# cedar_ember=1 : sans ce paramètre, la section « Limit resets » est absente de la réponse.
+USAGE_ENDPOINT = "/api/organizations/{org_id}/usage?cedar_ember=1"
 
 # Endpoints optionnels — un échec n'interrompt jamais la mise à jour.
 # Clé = nom logique utilisé dans data["raw"] et par _transform().
