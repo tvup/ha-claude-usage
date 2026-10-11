@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import CONF_CF_CLEARANCE, CONF_ORG_ID, CONF_SESSION_KEY, DOMAIN
-from .coordinator import ClaudeUsageCoordinator
+from .coordinator import ClaudeUsageCoordinator, _optional_failures
 
 PLATFORMS = [Platform.SENSOR]
 
@@ -58,6 +58,7 @@ async def async_get_config_entry_diagnostics(
             "last_success_at": m.last_success_at,
             "last_response_ms": m.last_response_ms,
         },
+        "optional_endpoint_failures": dict(_optional_failures),
         "last_data": coordinator.data,
     }
 

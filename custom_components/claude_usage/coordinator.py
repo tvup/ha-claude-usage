@@ -43,6 +43,9 @@ _BROWSER_HEADERS = {
     "accept": "application/json, text/plain, */*",
     "accept-language": "en-US,en;q=0.9,fr;q=0.8",
     "accept-encoding": "gzip, deflate",
+    # Envoyé par le frontend claude.ai sur tous ses appels /api ; certains
+    # endpoints (ex. overage_spend_limit) peuvent le refuser sans.
+    "anthropic-client-platform": "web_claude_ai",
     "referer": "https://claude.ai/settings/usage",
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
@@ -486,6 +489,23 @@ def _transform(raw: dict, extras: dict | None = None) -> dict:
     }
 
 
+# Dernier échec journalisé par endpoint optionnel — évite de répéter le même
+# avertissement à chaque poll tout en signalant tout changement.
+_optional_failures: dict[str, str] = {}
+
+
+def _report_optional(name: str, failure: str | None) -> None:
+    previous = _optional_failures.get(name)
+    if failure is None:
+        if previous is not None:
+            _LOGGER.info("[OPTIONNEL] %s → de nouveau disponible", name)
+            del _optional_failures[name]
+        return
+    if failure != previous:
+        _LOGGER.warning("[OPTIONNEL] %s → %s ; section ignorée", name, failure)
+        _optional_failures[name] = failure
+
+
 async def _fetch_optional(
     session: aiohttp.ClientSession, headers: dict, org_id: str
 ) -> dict:
@@ -501,14 +521,18 @@ async def _fetch_optional(
                 allow_redirects=False,
                 trace_request_ctx={},
             ) as resp:
+                body = await resp.text()
                 if resp.status != 200:
-                    _LOGGER.debug("[OPTIONNEL] %s → status %d, ignoré", name, resp.status)
+                    _report_optional(name, f"status {resp.status}: {body[:200]!r}")
                     continue
-                payload = json.loads(await resp.text())
-                if isinstance(payload, dict):
-                    results[name] = payload
+                payload = json.loads(body)
+                if not isinstance(payload, dict):
+                    _report_optional(name, f"réponse inattendue ({type(payload).__name__})")
+                    continue
+                results[name] = payload
+                _report_optional(name, None)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
-            _LOGGER.debug("[OPTIONNEL] %s → %s: %s, ignoré", name, type(err).__name__, err)
+            _report_optional(name, f"{type(err).__name__}: {err}")
     return results
 
 
