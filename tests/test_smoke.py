@@ -21,14 +21,21 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.claude_usage.__init__ import _mask, _success_rate
-from custom_components.claude_usage.const import BASE_URL, DOMAIN, USAGE_ENDPOINT
+from custom_components.claude_usage.const import (
+    BASE_URL,
+    DOMAIN,
+    OPTIONAL_ENDPOINTS,
+    USAGE_ENDPOINT,
+)
 from custom_components.claude_usage.coordinator import (
     ClaudeUsageCoordinator,
     UsageMetrics,
+    _transform,
     validate_credentials,
 )
 from custom_components.claude_usage.sensor import (
     DIAGNOSTIC_SENSORS,
+    RAW_SENSOR,
     SENSORS,
     ClaudeUsageSensor,
 )
@@ -259,3 +266,110 @@ def test_success_rate_zero_total():
 
 def test_success_rate_all_failed():
     assert _success_rate(5, 5) == 0.0
+
+
+# ── Endpoints optionnels + nouveaux champs ──────────────────────────────────
+
+_ORG_URL = BASE_URL + OPTIONAL_ENDPOINTS["organization"].format(org_id=ORG_ID)
+_PREPAID_URL = BASE_URL + OPTIONAL_ENDPOINTS["prepaid_credits"].format(org_id=ORG_ID)
+
+
+async def test_fetch_includes_optional_endpoints(
+    fake_raw_api_data, fake_organization_data, fake_prepaid_credits_data
+):
+    """Optional endpoints feed plan, usage credits and the raw payloads."""
+    with aioresponses() as m:
+        m.get(_USAGE_URL, payload=fake_raw_api_data, status=200)
+        m.get(_ORG_URL, payload=fake_organization_data, status=200)
+        m.get(_PREPAID_URL, payload=fake_prepaid_credits_data, status=200)
+        result, _cookies = await validate_credentials(SESSION_KEY, CF_CLEARANCE, ORG_ID)
+
+    assert result["subscription_type"] == "Max 5x"
+    assert result["usage_credits"] == {"amount": 12.5, "amount_cents": 1250, "currency": "USD"}
+    assert set(result["raw"]) == {"usage", "organization", "prepaid_credits"}
+
+
+async def test_optional_endpoint_failure_is_ignored(fake_raw_api_data):
+    """A failing optional endpoint never fails the update."""
+    with aioresponses() as m:
+        m.get(_USAGE_URL, payload=fake_raw_api_data, status=200)
+        m.get(_ORG_URL, status=404, body="Not found")
+        m.get(_PREPAID_URL, status=500, body="boom")
+        result, _cookies = await validate_credentials(SESSION_KEY, CF_CLEARANCE, ORG_ID)
+
+    assert result["session_5h"]["utilization"] == 42
+    assert result["subscription_type"] is None
+    assert result["usage_credits"]["amount"] is None
+    assert set(result["raw"]) == {"usage"}
+
+
+def test_transform_subscription_from_capabilities(fake_raw_api_data):
+    data = _transform(fake_raw_api_data, {"organization": {"capabilities": ["chat", "claude_pro"]}})
+    assert data["subscription_type"] == "Pro"
+
+
+def test_transform_cloud_credits_and_limit_resets(fake_raw_api_data):
+    raw = {
+        **fake_raw_api_data,
+        "cloud_session_credits": {
+            "remaining_cents": 1000,
+            "total_cents": 10000,
+            "expires_at": "2026-11-05T07:59:00+00:00",
+            "currency": "USD",
+        },
+        "limit_resets": [
+            {"expires_at": "2026-11-20T00:00:00+00:00"},
+            {"expires_at": "2026-11-01T00:00:00+00:00"},
+        ],
+    }
+    data = _transform(raw)
+
+    assert data["cloud_credits"] == {
+        "remaining": 10.0,
+        "total": 100.0,
+        "expires_at": "2026-11-05T07:59:00+00:00",
+        "currency": "USD",
+    }
+    assert data["limit_resets"] == {"count": 2, "next_expires_at": "2026-11-01T00:00:00+00:00"}
+
+
+def test_transform_unknown_sections_are_none(fake_raw_api_data):
+    data = _transform(fake_raw_api_data)
+    assert data["cloud_credits"]["remaining"] is None
+    assert data["limit_resets"]["count"] is None
+
+
+def test_new_sensors_read_values(fake_usage_data):
+    coordinator = MagicMock()
+    coordinator.data = fake_usage_data
+
+    def value(key):
+        return _make_sensor(coordinator, next(s for s in SENSORS if s.key == key)).native_value
+
+    assert value("subscription_type") == "Pro"
+    assert value("limit_resets_count") == 1
+    assert value("cloud_credits_left") == 10.0
+    assert value("cloud_credits_total") == 100.0
+    assert value("cloud_credits_expires_at").isoformat() == "2026-11-05T07:59:00+00:00"
+    assert value("usage_credits") == 12.5
+    assert value("usage_credits_enabled") == "on"
+    assert value("monthly_spend_limit") == 40.0
+    assert value("monthly_spend_used") == 0.1
+
+
+def test_usage_sensor_exposes_resets_at(fake_usage_data):
+    coordinator = MagicMock()
+    coordinator.data = fake_usage_data
+
+    session_desc = next(s for s in SENSORS if s.key == "session_utilization")
+    sensor = _make_sensor(coordinator, session_desc)
+    assert sensor.extra_state_attributes == {"resets_at": "2026-04-14T05:00:00+00:00"}
+
+
+def test_raw_sensor_lists_endpoints(fake_usage_data):
+    coordinator = MagicMock()
+    coordinator.data = fake_usage_data
+
+    sensor = _make_sensor(coordinator, RAW_SENSOR)
+    assert sensor.native_value == "organization, usage"
+    assert sensor.extra_state_attributes == {"usage": {}, "organization": {}}

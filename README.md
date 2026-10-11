@@ -17,6 +17,19 @@ Polls `claude.ai` at a configurable interval (default: every 60 seconds) and exp
 | Weekly Opus Usage | Weekly Opus-specific limit (if on your plan) | % |
 | Extra Credits Used | Extra usage credits consumed this month | credits |
 | Extra Usage | Extra usage as a percentage of monthly limit | % |
+| Plan | Subscription plan (Free / Pro / Max 5x / Max 20x / Team / Enterprise) | — |
+| Limit Resets | Number of available limit resets (`next_expires_at` attribute) | — |
+| Cloud Credits Left | Remaining included cloud session credit | currency |
+| Cloud Credits Total | Total included cloud session credit | currency |
+| Cloud Credits Expires | When the included cloud session credit expires | timestamp |
+| Usage Credits | Prepaid usage credit balance (`amount_cents` attribute) | currency |
+| Usage Credits Enabled | Whether usage credits kick in past plan limits | on/off |
+| Monthly Spend Limit | Monthly spend cap for usage credits | currency |
+| Monthly Spend Used | Usage credits spent this month | currency |
+
+The usage sensors (Session / Weekly / Sonnet / Opus) expose a `resets_at` attribute.
+The diagnostic **API Response** sensor exposes the raw JSON of every endpoint polled as
+attributes (not recorded) — use it to check which fields claude.ai currently returns.
 
 All sensors appear under a single **Claude Usage** device.
 

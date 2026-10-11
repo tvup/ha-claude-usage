@@ -11,3 +11,10 @@ UPDATE_INTERVAL_MAX = 21600 # seconds (maximum = 6 h)
 
 BASE_URL = "https://claude.ai"
 USAGE_ENDPOINT = "/api/organizations/{org_id}/usage"
+
+# Endpoints optionnels — un échec n'interrompt jamais la mise à jour.
+# Clé = nom logique utilisé dans data["raw"] et par _transform().
+OPTIONAL_ENDPOINTS = {
+    "organization": "/api/organizations/{org_id}",
+    "prepaid_credits": "/api/organizations/{org_id}/prepaid/credits",
+}

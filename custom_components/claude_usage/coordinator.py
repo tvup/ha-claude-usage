@@ -23,6 +23,7 @@ from .const import (
     CONF_SESSION_KEY,
     CONF_UPDATE_INTERVAL,
     DOMAIN,
+    OPTIONAL_ENDPOINTS,
     UPDATE_INTERVAL,
     USAGE_ENDPOINT,
 )
@@ -292,8 +293,141 @@ def _parse_slot(raw: dict, key: str) -> dict | None:
     }
 
 
-def _transform(raw: dict) -> dict:
-    """Transforme la réponse brute de l'API en structure attendue par les sensors."""
+def _first(*values):
+    """Retourne la première valeur non-None."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _deep_find(payload, keys: tuple[str, ...]):
+    """Cherche récursivement la première clé (insensible à la casse) parmi `keys`.
+
+    Les noms de champs des nouvelles sections de claude.ai/settings/usage ne sont
+    pas documentés : on accepte plusieurs variantes plutôt que d'échouer.
+    """
+    wanted = {k.lower() for k in keys}
+    stack = [payload]
+    while stack:
+        node = stack.pop(0)
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key.lower() in wanted and value is not None:
+                    return value
+            stack.extend(v for v in node.values() if isinstance(v, (dict, list)))
+        elif isinstance(node, list):
+            stack.extend(v for v in node if isinstance(v, (dict, list)))
+    return None
+
+
+def _number(value) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _subscription_type(raw: dict, organization: dict) -> str | None:
+    """Déduit le plan (Free / Pro / Max 5x / Max 20x / Team / Enterprise)."""
+    explicit = _deep_find(raw, ("subscription_type", "plan_type", "plan"))
+    if isinstance(explicit, str) and explicit:
+        return explicit
+
+    tier = str(organization.get("rate_limit_tier") or "").lower()
+    capabilities = [str(c).lower() for c in organization.get("capabilities") or []]
+    billing = str(organization.get("billing_type") or "").lower()
+
+    if "max_20x" in tier:
+        return "Max 20x"
+    if "max_5x" in tier:
+        return "Max 5x"
+    if "claude_max" in capabilities or "max" in tier:
+        return "Max"
+    if "claude_pro" in capabilities or "pro" in tier:
+        return "Pro"
+    if "enterprise" in tier or "enterprise" in billing:
+        return "Enterprise"
+    if "raven" in capabilities or "team" in tier:
+        return "Team"
+    if organization:
+        return "Free"
+    return None
+
+
+def _limit_resets(payloads: dict) -> dict:
+    """Section « Limit resets » : liste de resets disponibles avec date d'expiration."""
+    found = _deep_find(
+        payloads,
+        ("limit_resets", "rate_limit_resets", "available_resets", "reset_grants"),
+    )
+    if isinstance(found, list):
+        expiries = sorted(
+            str(e) for item in found if isinstance(item, dict)
+            for e in [_first(item.get("expires_at"), item.get("expiration"), item.get("expiry"))]
+            if e
+        )
+        return {"count": len(found), "next_expires_at": expiries[0] if expiries else None}
+    count = _number(found)
+    if count is not None:
+        return {"count": int(count), "next_expires_at": None}
+    return {"count": None, "next_expires_at": None}
+
+
+def _cloud_credits(payloads: dict) -> dict:
+    """Section « Cloud session credits » (montants en cents si le champ l'indique)."""
+    section = _deep_find(
+        payloads,
+        ("cloud_session_credits", "cloud_session_credit", "cloud_credits", "remote_session_credits"),
+    )
+    if not isinstance(section, dict):
+        return {"remaining": None, "total": None, "expires_at": None, "currency": None}
+
+    def amount(*keys: str) -> float | None:
+        for key in keys:
+            value = _number(section.get(key))
+            if value is not None:
+                return value / 100 if key.endswith(("_cents", "_minor_units")) else value
+        return None
+
+    return {
+        "remaining": amount(
+            "remaining", "remaining_amount", "balance", "left", "amount_remaining",
+            "remaining_cents", "balance_cents", "remaining_minor_units",
+        ),
+        "total": amount(
+            "total", "total_amount", "granted", "initial_amount", "amount",
+            "total_cents", "granted_cents", "amount_cents", "amount_minor_units",
+        ),
+        "expires_at": _first(section.get("expires_at"), section.get("expiration"), section.get("expiry")),
+        "currency": section.get("currency"),
+    }
+
+
+def _usage_credits(payloads: dict) -> dict:
+    """Section « Usage credits » : solde prépayé (API en unités mineures = cents)."""
+    prepaid = payloads.get("prepaid_credits") or {}
+    cents = _number(_first(prepaid.get("amount"), prepaid.get("balance"), prepaid.get("amount_cents")))
+    return {
+        "amount": round(cents / 100, 2) if cents is not None else None,
+        "amount_cents": int(cents) if cents is not None else None,
+        "currency": prepaid.get("currency"),
+    }
+
+
+def _transform(raw: dict, extras: dict | None = None) -> dict:
+    """Transforme la réponse brute de l'API en structure attendue par les sensors.
+
+    `extras` contient les réponses des endpoints optionnels (clé = OPTIONAL_ENDPOINTS).
+    """
+    extras = extras or {}
+    payloads = {"usage": raw, **extras}
     extra = raw.get("extra_usage") or {}
     used = extra.get("used_credits") or 0.0
     limit = extra.get("monthly_limit") or 0
@@ -307,8 +441,36 @@ def _transform(raw: dict) -> dict:
             "used": used,
             "limit": limit,
             "utilization": round(used / limit * 100, 1) if limit else 0.0,
+            "currency": extra.get("currency"),
         },
+        "subscription_type": _subscription_type(raw, extras.get("organization") or {}),
+        "limit_resets": _limit_resets(payloads),
+        "cloud_credits": _cloud_credits(payloads),
+        "usage_credits": _usage_credits(payloads),
+        "raw": payloads,
     }
+
+
+async def _fetch_optional(
+    session: aiohttp.ClientSession, headers: dict, org_id: str
+) -> dict:
+    """Récupère les endpoints optionnels ; les erreurs sont journalisées puis ignorées."""
+    results: dict = {}
+    for name, endpoint in OPTIONAL_ENDPOINTS.items():
+        url = BASE_URL + endpoint.format(org_id=org_id)
+        try:
+            async with session.get(
+                url, headers=headers, timeout=_TIMEOUT, allow_redirects=False
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug("[OPTIONNEL] %s → status %d, ignoré", name, resp.status)
+                    continue
+                payload = json.loads(await resp.text())
+                if isinstance(payload, dict):
+                    results[name] = payload
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+            _LOGGER.debug("[OPTIONNEL] %s → %s: %s, ignoré", name, type(err).__name__, err)
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +574,10 @@ async def _fetch_usage(
                     raise UpdateFailed("Réponse non-JSON de l'API")
 
                 _LOGGER.debug("[JSON] Réponse brute: %s", raw)
-                return _transform(raw), resp.cookies
+                cookies = resp.cookies
+
+            extras = await _fetch_optional(session, headers, org_id)
+            return _transform(raw, extras), cookies
 
     except ConfigEntryAuthFailed:
         raise
