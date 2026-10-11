@@ -13,10 +13,6 @@ Polls `claude.ai` at a configurable interval (default: every 60 seconds) and exp
 | Session Resets In | Time until the session resets | min |
 | Weekly Usage | How much of your weekly allowance you've used | % |
 | Weekly Resets In | Time until the weekly allowance resets | min |
-| Weekly Sonnet Usage | Weekly Sonnet-specific limit (if on your plan) | % |
-| Weekly Opus Usage | Weekly Opus-specific limit (if on your plan) | % |
-| Extra Credits Used | Extra usage credits consumed this month | credits |
-| Extra Usage | Extra usage as a percentage of monthly limit | % |
 | Plan | Subscription plan (Free / Pro / Max 5x / Max 20x / Team / Enterprise) | — |
 | Limit Resets | Number of available limit resets (`next_expires_at` attribute) | — |
 | Cloud Credits Left | Remaining included cloud session credit | currency |
@@ -27,9 +23,8 @@ Polls `claude.ai` at a configurable interval (default: every 60 seconds) and exp
 | Monthly Spend Limit | Monthly spend cap for usage credits | currency |
 | Monthly Spend Used | Usage credits spent this month | currency |
 
-The usage sensors (Session / Weekly / Sonnet / Opus) expose a `resets_at` attribute.
-The diagnostic **API Response** sensor exposes the raw JSON of every endpoint polled as
-attributes (not recorded) — use it to check which fields claude.ai currently returns.
+The Session and Weekly usage sensors expose a `resets_at` attribute.
+To inspect the raw JSON claude.ai returns, download the integration's diagnostics.
 
 All sensors appear under a single **Claude Usage** device.
 
@@ -46,13 +41,13 @@ All sensors appear under a single **Claude Usage** device.
 ### Option A — HACS (recommended)
 
 1. In Home Assistant, go to **HACS → Integrations → ⋮ → Custom repositories**
-2. Add `https://github.com/juliensere/ha-cloud-usage` with category **Integration**
+2. Add `https://github.com/tvup/ha-cloud-usage` with category **Integration**
 3. Search for **Claude Usage** and click **Download**
 4. Restart Home Assistant
 
 ### Option B — Manual download
 
-Go to the [**Releases page**](https://github.com/juliensere/ha-cloud-usage/releases/latest) and download `claude_usage.zip` from the latest release.
+Go to the [**Releases page**](https://github.com/tvup/ha-cloud-usage/releases/latest) and download `claude_usage.zip` from the latest release.
 
 Extract it into your Home Assistant `custom_components` directory:
 

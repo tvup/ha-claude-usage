@@ -16,7 +16,7 @@ scripts/                          ← standalone CLI helper
 | File | Role |
 |------|------|
 | `coordinator.py` | `DataUpdateCoordinator` — polls `GET /api/organizations/{org_id}/usage` every 60 s, auto-renews cookies, accumulates `UsageMetrics` |
-| `sensor.py` | 8 usage sensors + 5 diagnostic sensors; `ClaudeUsageSensorDescription` carries a `value_fn` (usage) or `metric_fn` (diagnostics) |
+| `sensor.py` | 14 usage sensors; `ClaudeUsageSensorDescription` carries a `value_fn` and optional `attrs_fn` |
 | `config_flow.py` | Three flows: `user` (initial setup), `reauth_confirm` (triggered by `ConfigEntryAuthFailed`), `reconfigure` (manual update) |
 | `__init__.py` | Entry setup/unload + `async_get_config_entry_diagnostics` |
 | `const.py` | All constants — change `UPDATE_INTERVAL` here to adjust poll frequency |
@@ -49,5 +49,4 @@ Types: `feat`, `fix`, `chore`, `test`, `docs`, `refactor`, `ci`.
 - **No `br` in `Accept-Encoding`** — the server may return brotli-compressed responses that aiohttp cannot decode without the optional `brotli` package. Keep `"accept-encoding": "gzip, deflate"`.
 - **URL-encode cookies** — `cf_clearance` contains unicode characters; always wrap values with `urllib.parse.quote(..., safe='')`.
 - **`ConfigEntryAuthFailed`** — raise this (not `UpdateFailed`) on 401/403 so HA triggers the native reauth notification automatically.
-- **Diagnostic sensors are always available** — their `available` property returns `True` unconditionally; they read from `coordinator.metrics`, not `coordinator.data`.
 - Integration files are at the repo root under `custom_components/` (HACS convention). The Docker dev setup mounts both `./config:/config` (HA runtime config) and `./custom_components:/config/custom_components` (integration files) separately.

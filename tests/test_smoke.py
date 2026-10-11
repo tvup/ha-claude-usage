@@ -5,9 +5,7 @@ Coverage:
   - ClaudeUsageCoordinator._async_update_data: success path + metrics update
   - ClaudeUsageCoordinator._async_update_data: auth failure increments failed_requests
   - ClaudeUsageSensor.native_value: usage sensor reads from coordinator.data
-  - ClaudeUsageSensor.native_value: diagnostic sensor reads from coordinator.metrics
   - ClaudeUsageSensor.available: usage sensor unavailable when data is None
-  - ClaudeUsageSensor.available: diagnostic sensor always available
   - __init__._mask / _success_rate helpers
 """
 from __future__ import annotations
@@ -34,8 +32,6 @@ from custom_components.claude_usage.coordinator import (
     validate_credentials,
 )
 from custom_components.claude_usage.sensor import (
-    DIAGNOSTIC_SENSORS,
-    RAW_SENSOR,
     SENSORS,
     ClaudeUsageSensor,
 )
@@ -187,27 +183,6 @@ def test_usage_sensor_none_when_data_missing():
     assert sensor.native_value is None
 
 
-def test_usage_sensor_nullable_field(fake_usage_data):
-    """weekly_opus sensor returns None gracefully when the field is None."""
-    coordinator = MagicMock()
-    coordinator.data = fake_usage_data  # weekly_opus is None in the fixture
-
-    opus_desc = next(s for s in SENSORS if s.key == "weekly_opus")
-    sensor = _make_sensor(coordinator, opus_desc)
-    assert sensor.native_value is None
-
-
-def test_diagnostic_sensor_reads_metric_fn():
-    """Diagnostic sensor calls metric_fn on coordinator.metrics."""
-    metrics = UsageMetrics(total_requests=7, failed_requests=2)
-    coordinator = MagicMock()
-    coordinator.metrics = metrics
-
-    total_desc = next(s for s in DIAGNOSTIC_SENSORS if s.key == "diag_total_requests")
-    sensor = _make_sensor(coordinator, total_desc)
-    assert sensor.native_value == 7
-
-
 # ── Sensor available ─────────────────────────────────────────────────────────
 
 
@@ -223,20 +198,6 @@ def test_usage_sensor_unavailable_when_no_data():
     sensor.entity_description = session_desc
     # Bypass CoordinatorEntity.available by calling the property directly
     assert sensor.available is False
-
-
-def test_diagnostic_sensor_always_available():
-    """Diagnostic sensor.available is True regardless of coordinator state."""
-    coordinator = MagicMock()
-    coordinator.last_update_success = False
-    coordinator.data = None
-    coordinator.metrics = UsageMetrics()
-
-    diag_desc = next(s for s in DIAGNOSTIC_SENSORS if s.key == "diag_total_requests")
-    sensor = ClaudeUsageSensor.__new__(ClaudeUsageSensor)
-    sensor.coordinator = coordinator
-    sensor.entity_description = diag_desc
-    assert sensor.available is True
 
 
 # ── Helper functions ─────────────────────────────────────────────────────────
@@ -364,12 +325,3 @@ def test_usage_sensor_exposes_resets_at(fake_usage_data):
     session_desc = next(s for s in SENSORS if s.key == "session_utilization")
     sensor = _make_sensor(coordinator, session_desc)
     assert sensor.extra_state_attributes == {"resets_at": "2026-04-14T05:00:00+00:00"}
-
-
-def test_raw_sensor_lists_endpoints(fake_usage_data):
-    coordinator = MagicMock()
-    coordinator.data = fake_usage_data
-
-    sensor = _make_sensor(coordinator, RAW_SENSOR)
-    assert sensor.native_value == "organization, usage"
-    assert sensor.extra_state_attributes == {"usage": {}, "organization": {}}
