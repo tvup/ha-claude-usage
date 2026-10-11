@@ -356,3 +356,17 @@ def test_transform_codenamed_sections(fake_raw_api_data):
     assert data["limit_resets"] == {"count": 2, "next_expires_at": "2026-11-20T00:00:00+00:00"}
     assert data["extra_usage"]["used"] is None
     assert data["extra_usage"]["limit"] is None
+
+
+def test_transform_extra_usage_falls_back_to_overage_spend_limit(fake_raw_api_data):
+    raw = {**fake_raw_api_data, "extra_usage": None}
+    overage = {"is_enabled": False, "monthly_credit_limit": 4000, "used_credits": 0, "currency": "USD"}
+    data = _transform(raw, {"overage_spend_limit": overage})
+
+    assert data["extra_usage"] == {
+        "enabled": False,
+        "used": 0,
+        "limit": 4000,
+        "utilization": 0.0,
+        "currency": "USD",
+    }

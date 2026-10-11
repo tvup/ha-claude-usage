@@ -452,21 +452,31 @@ def _transform(raw: dict, extras: dict | None = None) -> dict:
     """
     extras = extras or {}
     payloads = {"usage": raw, **extras}
-    # extra_usage vaut null quand l'usage supplémentaire est désactivé.
+    # extra_usage vaut null quand l'usage supplémentaire est désactivé :
+    # on se rabat alors sur overage_spend_limit (mêmes montants, en cents).
     extra = raw.get("extra_usage") or {}
-    used = extra.get("used_credits") if extra else None
-    limit = extra.get("monthly_limit") if extra else None
+    overage = extras.get("overage_spend_limit") or {}
+    if extra:
+        used = extra.get("used_credits")
+        limit = extra.get("monthly_limit")
+        enabled = extra.get("is_enabled", False)
+        currency = extra.get("currency")
+    else:
+        used = overage.get("used_credits")
+        limit = overage.get("monthly_credit_limit")
+        enabled = overage.get("is_enabled", False)
+        currency = overage.get("currency")
     return {
         "session_5h": _parse_slot(raw, "five_hour"),
         "weekly": _parse_slot(raw, "seven_day"),
         "weekly_sonnet": _parse_slot(raw, "seven_day_sonnet"),
         "weekly_opus": _parse_slot(raw, "seven_day_opus"),
         "extra_usage": {
-            "enabled": extra.get("is_enabled", False),
+            "enabled": enabled,
             "used": used,
             "limit": limit,
             "utilization": round((used or 0) / limit * 100, 1) if limit else None,
-            "currency": extra.get("currency"),
+            "currency": currency,
         },
         "subscription_type": _subscription_type(raw, extras.get("organization") or {}),
         "limit_resets": _limit_resets(payloads),

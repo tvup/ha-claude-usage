@@ -18,4 +18,5 @@ USAGE_ENDPOINT = "/api/organizations/{org_id}/usage?cedar_ember=1"
 OPTIONAL_ENDPOINTS = {
     "organization": "/api/organizations/{org_id}",
     "prepaid_credits": "/api/organizations/{org_id}/prepaid/credits",
+    "overage_spend_limit": "/api/organizations/{org_id}/overage_spend_limit",
 }
