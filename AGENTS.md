@@ -18,7 +18,8 @@ scripts/                          ← standalone CLI helper
 | `coordinator.py` | `DataUpdateCoordinator` — polls `GET /api/organizations/{org_id}/usage` every 60 s, auto-renews cookies, accumulates `UsageMetrics` |
 | `sensor.py` | 14 usage sensors; `ClaudeUsageSensorDescription` carries a `value_fn` and optional `attrs_fn` |
 | `config_flow.py` | Three flows: `user` (initial setup), `reauth_confirm` (triggered by `ConfigEntryAuthFailed`), `reconfigure` (manual update) |
-| `__init__.py` | Entry setup/unload + `async_get_config_entry_diagnostics` |
+| `__init__.py` | Entry setup/unload |
+| `diagnostics.py` | `async_get_config_entry_diagnostics` (HA only discovers it in this file) |
 | `const.py` | All constants — change `UPDATE_INTERVAL` here to adjust poll frequency |
 
 ## Running tests

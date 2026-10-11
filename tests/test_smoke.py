@@ -6,7 +6,7 @@ Coverage:
   - ClaudeUsageCoordinator._async_update_data: auth failure increments failed_requests
   - ClaudeUsageSensor.native_value: usage sensor reads from coordinator.data
   - ClaudeUsageSensor.available: usage sensor unavailable when data is None
-  - __init__._mask / _success_rate helpers
+  - diagnostics._mask / _success_rate helpers
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.claude_usage.__init__ import _mask, _success_rate
+from custom_components.claude_usage.diagnostics import _mask, _success_rate
 from custom_components.claude_usage.const import (
     BASE_URL,
     DOMAIN,
